@@ -1,0 +1,39 @@
+//@version=5
+strategy("Pyramiding with EMA144 - Final Fix", overlay=true, pyramiding=3)  // 允许最多加仓 3 次
+
+// 参数设置
+emaLength = 144  // EMA 周期
+int maxPyramiding = 3  // 最大加仓次数
+var int pyramidingCount = 0  // 当前加仓次数
+var float lastPyramidPrice = na  // 上次加仓的价格
+
+// 计算 EMA144
+ema144 = ta.ema(close, emaLength)
+
+// 调试信息
+plot(ema144, color=color.blue, title="EMA144")
+plotshape(ta.crossover(close, ema144), location=location.belowbar, color=color.green, style=shape.labelup, text="Crossover")
+plotshape(ta.crossunder(close, ema144), location=location.abovebar, color=color.red, style=shape.labeldown, text="Crossunder")
+
+// 开仓条件：价格上穿 EMA144
+if (ta.crossover(close, ema144))
+    if (strategy.position_size == 0)  // 初始开仓
+        strategy.entry("Initial Buy", strategy.long)
+        pyramidingCount := 1  // 重置加仓次数
+        lastPyramidPrice := close  // 记录初始开仓价格
+        label.new(bar_index, low, text="Initial Buy", color=color.green, textcolor=color.white, style=label.style_label_up)
+
+// 加仓条件：价格维持在 EMA144 之上，并且未达到最大加仓次数
+if (strategy.position_size > 0 and close > ema144 and pyramidingCount < maxPyramiding)
+    if (na(lastPyramidPrice) or close > lastPyramidPrice)  // 避免重复加仓
+        strategy.entry("Pyramid Buy", strategy.long)
+        pyramidingCount := pyramidingCount + 1  // 更新加仓次数
+        lastPyramidPrice := close  // 更新上次加仓价格
+        label.new(bar_index, low, text="Pyramid Buy " + str.tostring(pyramidingCount), color=color.blue, textcolor=color.white, style=label.style_label_up)
+
+// 平仓条件：价格下穿 EMA144
+if (ta.crossunder(close, ema144) and strategy.position_size > 0)
+    strategy.close("Initial Buy", comment="Close All Positions")
+    pyramidingCount := 0  // 重置加仓次数
+    lastPyramidPrice := na  // 重置上次加仓价格
+    label.new(bar_index, high, text="Close All", color=color.red, textcolor=color.white, style=label.style_label_down)
